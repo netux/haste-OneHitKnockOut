@@ -64,11 +64,11 @@ public class OneHitKnockOut
                 case OneHitKnockoutOnHit.END_RUN:
                     RunHandler.LoseRun(transitionOutOverride: false);
                     break;
-                case OneHitKnockoutOnHit.RESTART_SAME_SHARD:
-                case OneHitKnockoutOnHit.RESTART_NEW_SHARD:
+                case OneHitKnockoutOnHit.RESTART_SAME_SEED:
+                case OneHitKnockoutOnHit.RESTART_NEW_SEED:
                     var config = RunHandler.config;
                     var shardID = RunHandler.RunData.shardID;
-                    var seed = OnHit == OneHitKnockoutOnHit.RESTART_SAME_SHARD
+                    var seed = OnHit == OneHitKnockoutOnHit.RESTART_SAME_SEED
                         ? RunHandler.RunData.currentSeed
                         : RunHandler.GenerateSeed();
 
@@ -190,8 +190,8 @@ public class OneHitKnockOutEnabledSetting : OffOnSetting, IExposedSetting, ICond
 public enum OneHitKnockoutOnHit
 {
     END_RUN,
-    RESTART_NEW_SHARD,
-    RESTART_SAME_SHARD
+    RESTART_NEW_SEED,
+    RESTART_SAME_SEED
 }
 
 [HasteSetting]
@@ -201,8 +201,8 @@ public class OneHitKnockOutOnHitSetting : EnumSetting<OneHitKnockoutOnHit>, IExp
 
     public override List<LocalizedString> GetLocalizedChoices() => [
         new UnlocalizedString("End run"),
-        new UnlocalizedString("Restart run on a new Shard"),
-        new UnlocalizedString("Restart run in the same Shard"),
+        new UnlocalizedString("Restart run with a new seed"),
+        new UnlocalizedString("Restart run with the same seed"),
     ];
 
     public override void ApplyValue() { /* no-op */ }
