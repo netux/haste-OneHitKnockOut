@@ -11,7 +11,7 @@ namespace HasteOHKOMod;
 [LandfallPlugin]
 public class OneHitKnockOut
 {
-    private static bool triggeredOHKOPayload = false;
+    private static bool isTriggeringOHKOPayloadAlready = false;
 
     public static bool IsOHKOEnabled
     {
@@ -25,33 +25,34 @@ public class OneHitKnockOut
 
     static OneHitKnockOut()
     {
-        // TODO(netux): show some indicator in the UI that OHKO is enabled
         // TODO(netux): show a counter of how many automatic restarts there were
-
-        var UI_HealthBarBarField = typeof(UI_HealthBar).GetField("bar", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        var UniversalBarSetValuesMethod = typeof(UniversalBar).GetMethod("SetValues", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
 
         On.PlayerCharacter.Start += (original, playerCharacter) =>
         {
-            triggeredOHKOPayload = false;
+            isTriggeringOHKOPayloadAlready = false;
 
             return original(playerCharacter);
         };
 
-        On.PlayerCharacter.TakeDamage += (original, self, damage, sourceTransform, sourceName, source) =>
+        On.HasteStats.AddStat += (original, statType, value) =>
         {
-            original(self, damage, sourceTransform, sourceName, source);
+            original(statType, value);
+
+            if (statType != HasteStatType.STAT_DAMAGE_TAKEN)
+            {
+                return;
+            }
 
             if (!IsOHKOEnabled)
             {
                 return;
             }
 
-            if (triggeredOHKOPayload)
+            if (isTriggeringOHKOPayloadAlready)
             {
                 return;
             }
-            triggeredOHKOPayload = true;
+            isTriggeringOHKOPayloadAlready = true;
 
             switch (OnHit)
             {
@@ -73,6 +74,9 @@ public class OneHitKnockOut
             }
         };
 
+        var UI_HealthBarBarField = typeof(UI_HealthBar).GetField("bar", BindingFlags.Instance | BindingFlags.NonPublic);
+        var UniversalBarSetValuesMethod = typeof(UniversalBar).GetMethod("SetValues", BindingFlags.Instance | BindingFlags.NonPublic);
+        var PlayerHealthPercentageMethod = typeof(Player).GetMethod("HealthPercentage", BindingFlags.Instance | BindingFlags.NonPublic);
         On.UI_HealthBar.Update += (original, healthBar) =>
         {
             if (!IsOHKOEnabled)
@@ -82,8 +86,9 @@ public class OneHitKnockOut
             }
 
             var bar = (UniversalBar)UI_HealthBarBarField.GetValue(healthBar);
+            var healthPercentage = (float)PlayerHealthPercentageMethod.Invoke(Player.localPlayer, []);
             UniversalBarSetValuesMethod.Invoke(bar, [
-                /* fills: */ triggeredOHKOPayload ? 0f : 1f,
+                /* fills: */ healthPercentage < 1f ? 0f : 1f,
                 /* segments: */ 1f,
                 /* activationAmount: */ Player.localPlayer.data.HealingFeedback()
             ]);
