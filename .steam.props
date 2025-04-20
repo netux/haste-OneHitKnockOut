@@ -37,7 +37,9 @@
   <!-- Settings that don't depend on file contents -->
   <PropertyGroup>
     <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateDependencyFile>false</GenerateDependencyFile>
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <!-- Target to extract and set the Steam library paths -->
