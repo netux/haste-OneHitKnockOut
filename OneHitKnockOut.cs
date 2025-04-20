@@ -177,8 +177,7 @@ public class OneHitKnockOutEnabledSetting : OffOnSetting, IExposedSetting, ICond
         new("Settings", "EnabledGraphicOption")
     ];
 
-    public override void ApplyValue() { /* no-op */
-        }
+    public override void ApplyValue() { /* no-op */ }
 
     public LocalizedString GetDisplayName() => new UnlocalizedString("One-Hit KO");
 
