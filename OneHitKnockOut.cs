@@ -43,6 +43,11 @@ public class OneHitKnockOut
                 return;
             }
 
+            if (!RunHandler.InRun)
+            {
+                return;
+            }
+
             if (!IsOHKOEnabled)
             {
                 return;
