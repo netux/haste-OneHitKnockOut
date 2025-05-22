@@ -79,9 +79,6 @@ public class OneHitKnockOut
             }
         };
 
-        var UI_HealthBarBarField = typeof(UI_HealthBar).GetField("bar", BindingFlags.Instance | BindingFlags.NonPublic);
-        var UniversalBarSetValuesMethod = typeof(UniversalBar).GetMethod("SetValues", BindingFlags.Instance | BindingFlags.NonPublic);
-        var PlayerHealthPercentageMethod = typeof(Player).GetMethod("HealthPercentage", BindingFlags.Instance | BindingFlags.NonPublic);
         On.UI_HealthBar.Update += (original, healthBar) =>
         {
             if (!IsOHKOEnabled)
@@ -90,13 +87,11 @@ public class OneHitKnockOut
                 return;
             }
 
-            var bar = (UniversalBar)UI_HealthBarBarField.GetValue(healthBar);
-            var healthPercentage = (float)PlayerHealthPercentageMethod.Invoke(Player.localPlayer, []);
-            UniversalBarSetValuesMethod.Invoke(bar, [
-                /* fills: */ healthPercentage < 1f ? 0f : 1f,
+            healthBar.bar.SetValues(
+                /* fills: */ Player.localPlayer.HealthPercentage() < 1f ? 0f : 1f,
                 /* segments: */ 1f,
                 /* activationAmount: */ Player.localPlayer.data.HealingFeedback()
-            ]);
+            );
         };
 
         IL.UI_PlayerLives.MaxLivesChanged += (il) =>
@@ -107,14 +102,14 @@ public class OneHitKnockOut
 
             cursor.GotoNext(
                 MoveType.After,
-                i => i.MatchLdfld(typeof(PlayerStats).GetField("lives", BindingFlags.Instance | BindingFlags.Public)),
-                i => i.MatchCallvirt(typeof(PlayerStat).GetMethod("GetValueInt", BindingFlags.Instance | BindingFlags.NonPublic))
+                i => i.MatchLdfld(typeof(PlayerStats).GetField(nameof(PlayerStats.lives), BindingFlags.Instance | BindingFlags.Public)),
+                i => i.MatchCallvirt(typeof(PlayerStat).GetMethod(nameof(PlayerStat.GetValueInt), BindingFlags.Instance | BindingFlags.NonPublic))
             );
 
             // if (OneHitKnockOut.IsOHKOEnabled) { use lives from PlayerStats }
             // else { use constant of 1 life heart }
             var storeOriginalLivesLabel = cursor.DefineLabel();
-            cursor.Emit(OpCodes.Call, typeof(OneHitKnockOut).GetMethod("get_IsOHKOEnabled", BindingFlags.Static | BindingFlags.Public));
+            cursor.Emit(OpCodes.Call, typeof(OneHitKnockOut).GetMethod($"get_{nameof(IsOHKOEnabled)}", BindingFlags.Static | BindingFlags.Public));
             cursor.Emit(OpCodes.Brfalse_S, storeOriginalLivesLabel);
             cursor.Emit(OpCodes.Pop); // pop result of PlayerStat.GetValueInt()
             cursor.Emit(OpCodes.Ldc_I4, 1); // add our own value instead :>
@@ -131,11 +126,11 @@ public class OneHitKnockOut
 
             cursor.GotoNext(
                 MoveType.After,
-                i => i.MatchLdfld(typeof(PersistentPlayerData).GetField("lives", BindingFlags.Instance | BindingFlags.Public))
+                i => i.MatchLdfld(typeof(PersistentPlayerData).GetField(nameof(PersistentPlayerData.lives), BindingFlags.Instance | BindingFlags.Public))
             );
 
             var storeOriginalLivesLabel = cursor.DefineLabel();
-            cursor.Emit(OpCodes.Call, typeof(OneHitKnockOut).GetMethod("get_IsOHKOEnabled", BindingFlags.Static | BindingFlags.Public));
+            cursor.Emit(OpCodes.Call, typeof(OneHitKnockOut).GetMethod($"get_{nameof(IsOHKOEnabled)}", BindingFlags.Static | BindingFlags.Public));
             cursor.Emit(OpCodes.Brfalse_S, storeOriginalLivesLabel);
             cursor.Emit(OpCodes.Pop); // pop result of PlayerStat.GetValueInt()
             cursor.Emit(OpCodes.Ldc_I4, 1); // add our own value instead :>
@@ -177,7 +172,8 @@ public class OneHitKnockOutEnabledSetting : OffOnSetting, IExposedSetting, ICond
         new("Settings", "EnabledGraphicOption")
     ];
 
-    public override void ApplyValue() { /* no-op */ }
+    public override void ApplyValue() { /* no-op */
+    }
 
     public LocalizedString GetDisplayName() => new UnlocalizedString("One-Hit KO");
 
