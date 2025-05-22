@@ -15,7 +15,15 @@ public class OneHitKnockOut
 
     public static bool IsOHKOEnabled
     {
-        get => GameHandler.Instance.SettingsHandler.GetSetting<OneHitKnockOutEnabledSetting>().Value == OffOnMode.ON;
+        get {
+            var setting = GameHandler.Instance?.SettingsHandler?.GetSetting<OneHitKnockOutEnabledSetting>();
+            if (setting == null)
+            {
+                return false;
+            }
+
+            return setting.Value == OffOnMode.ON;
+        }
     }
 
     public static OneHitKnockoutOnHit OnHit
@@ -27,6 +35,7 @@ public class OneHitKnockOut
     {
         // TODO(netux): show a counter of how many automatic restarts there were
 
+        #region Main logic hooks
         On.PlayerCharacter.Start += (original, playerCharacter) =>
         {
             isTriggeringOHKOPayloadAlready = false;
@@ -72,13 +81,14 @@ public class OneHitKnockOut
                         ? RunHandler.RunData.currentSeed
                         : RunHandler.GenerateSeed();
 
-                    //RunHandler.LoseRun(transitionOutOverride: true);
                     RunHandler.ClearCurrentRun();
                     RunHandler.StartAndPlayNewRun(config, shardID, seed);
                     break;
             }
         };
+        #endregion Main logic hooks
 
+        #region Update HUD hooks
         On.UI_HealthBar.Update += (original, healthBar) =>
         {
             if (!IsOHKOEnabled)
@@ -94,70 +104,54 @@ public class OneHitKnockOut
             );
         };
 
-        IL.UI_PlayerLives.MaxLivesChanged += (il) =>
+        IL.UI_PlayerLives.Update += (il) =>
         {
-            //UnityEngine.Debug.Log("Patching UI_PlayerLives.MaxLivesChanged");
+            var cursor = new ILCursor(il);
 
-            ILCursor cursor = new(il);
-
-            cursor.GotoNext(
+            // if (HasteSpectate.TryGet(out data)) {
+            if (!cursor.TryGotoNext(
                 MoveType.After,
-                i => i.MatchLdfld(typeof(PlayerStats).GetField(nameof(PlayerStats.lives), BindingFlags.Instance | BindingFlags.Public)),
-                i => i.MatchCallvirt(typeof(PlayerStat).GetMethod(nameof(PlayerStat.GetValueInt), BindingFlags.Instance | BindingFlags.NonPublic))
-            );
-
-            // if (OneHitKnockOut.IsOHKOEnabled) { use lives from PlayerStats }
-            // else { use constant of 1 life heart }
-            var storeOriginalLivesLabel = cursor.DefineLabel();
-            cursor.Emit(OpCodes.Call, typeof(OneHitKnockOut).GetMethod($"get_{nameof(IsOHKOEnabled)}", BindingFlags.Static | BindingFlags.Public));
-            cursor.Emit(OpCodes.Brfalse_S, storeOriginalLivesLabel);
-            cursor.Emit(OpCodes.Pop); // pop result of PlayerStat.GetValueInt()
-            cursor.Emit(OpCodes.Ldc_I4, 1); // add our own value instead :>
-            cursor.MarkLabel(storeOriginalLivesLabel);
-
-            //DebugLogInstructions(cursor.Instrs);
-        };
-
-        IL.UI_PlayerLives.LivesChanged += (il) =>
-        {
-            //UnityEngine.Debug.Log("Patching UI_PlayerLives.LivesChanged");
-
-            ILCursor cursor = new(il);
-
-            cursor.GotoNext(
-                MoveType.After,
-                i => i.MatchLdfld(typeof(PersistentPlayerData).GetField(nameof(PersistentPlayerData.lives), BindingFlags.Instance | BindingFlags.Public))
-            );
-
-            var storeOriginalLivesLabel = cursor.DefineLabel();
-            cursor.Emit(OpCodes.Call, typeof(OneHitKnockOut).GetMethod($"get_{nameof(IsOHKOEnabled)}", BindingFlags.Static | BindingFlags.Public));
-            cursor.Emit(OpCodes.Brfalse_S, storeOriginalLivesLabel);
-            cursor.Emit(OpCodes.Pop); // pop result of PlayerStat.GetValueInt()
-            cursor.Emit(OpCodes.Ldc_I4, 1); // add our own value instead :>
-            cursor.MarkLabel(storeOriginalLivesLabel);
-
-            //DebugLogInstructions(cursor.Instrs);
-        };
-    }
-
-    static void DebugLogInstructions(IEnumerable<Instruction> instrs)
-    {
-        foreach (var instruction in instrs)
-            UnityEngine.Debug.Log($"\t{InstructionToString(instruction)}");
-
-        static string InstructionToString(Instruction instruction) => $"{instruction.Offset:X4} {instruction.OpCode} {InstructionOperandToString(instruction.Operand)}";
-
-        static string InstructionOperandToString(object operand)
-        {
-            if (operand is ILLabel label)
+                i => i.MatchCallOrCallvirt(typeof(HasteSpectate).GetMethod(nameof(HasteSpectate.TryGet), BindingFlags.Public | BindingFlags.Static)),
+                i => i.MatchBrfalse(out _)
+            ))
             {
-                return $"(label→ {InstructionToString(label.Target)})";
+                UnityEngine.Debug.LogError("Could not find call to HasteSpectate.TryGet() in UI_PlayerLives.Update(). Hearts UI may not immediately change when enabling OHKO");
+                return;
             }
-            else
+
+            var afterOHKOHandlingLabel = cursor.DefineLabel();
+
+            //   if (OneHitKnockOut.IsOHKOEnabled) {
+            cursor.Emit(OpCodes.Call, typeof(OneHitKnockOut).GetMethod($"get_{nameof(IsOHKOEnabled)}", BindingFlags.Static | BindingFlags.Public));
+            cursor.Emit(OpCodes.Brfalse_S, afterOHKOHandlingLabel);
+
+            cursor.Emit(OpCodes.Ldarg_0); // this
+            cursor.EmitDelegate((UI_PlayerLives uiPlayerLives) =>
             {
-                return operand?.ToString() ?? "null";
-            }
-        }
+                var heartsToBeEnabled = isTriggeringOHKOPayloadAlready ? 0 : 1;
+
+                if (uiPlayerLives.hearts.Count != 1)
+                {
+                    uiPlayerLives.MaxLivesChanged(/* lives: */ heartsToBeEnabled, /* maxLives: */ 1);
+                    return;
+                }
+
+                if (uiPlayerLives.heartsEnabled != heartsToBeEnabled)
+                {
+                    uiPlayerLives.LivesChanged(/* lives: */ heartsToBeEnabled);
+                }
+            });
+
+            //     return;
+            cursor.Emit(OpCodes.Ret);
+            //   }
+
+            cursor.MarkLabel(afterOHKOHandlingLabel);
+
+            //   ... original code ...
+            // }
+        };
+        #endregion Update HUD hooks
     }
 }
 
